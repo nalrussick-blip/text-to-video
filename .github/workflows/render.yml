@@ -41,6 +41,9 @@ jobs:
           pip install edge-tts requests pillow --break-system-packages
 
       - name: Write script to file
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           if [ -n "${{ inputs.script }}" ]; then
             echo "${{ inputs.script }}" > script.txt
