@@ -329,7 +329,7 @@ def build_scene_clip(scene_idx: int, scene_text: str, media_path: Path,
 
     cmd = ["ffmpeg", "-y", *inputs, *filter_args,
            "-t", str(duration), *map_args,
-           "-c:v", "libx264", "-pix_fmt", "yuv420p",
+           "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS),
            "-c:a", "aac", "-shortest", str(out), "-loglevel", "error"]
     subprocess.run(cmd, check=True)
     return out
