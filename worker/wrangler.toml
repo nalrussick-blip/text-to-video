@@ -1,0 +1,18 @@
+name = "text-to-video-worker"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Free tier: KV and Workers both have generous free allowances.
+# Video/avatar storage uses GitHub instead of R2 — no payment card needed.
+kv_namespaces = [
+  { binding = "JOBS_KV", id = "f8cf323175cc4801939eb8791750eaa2" }
+]
+
+# Environment variables / secrets — set secrets with:
+#   wrangler secret put GITHUB_TOKEN
+#   wrangler secret put RENDER_SECRET
+#   wrangler secret put WHATSAPP_TOKEN
+[vars]
+GITHUB_REPO = "nalrussick-blip/text-to-video"   # repo hosting the render workflow AND storage
+WHATSAPP_PHONE_ID = "your-whatsapp-phone-number-id"
+DAILY_LIMIT = "20"   # protects free-tier quotas (GitHub Actions minutes, Pexels, Workers AI)

@@ -1,0 +1,7 @@
+﻿render/
+*.mp4
+__pycache__/
+node_modules/
+photo.jpg
+music.mp3
+script.txt
