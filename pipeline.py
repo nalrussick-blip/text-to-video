@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 import edge_tts
 import requests
@@ -38,7 +39,7 @@ HEADERS_DOWNLOAD = {
 
 
 def download_file(url: str, out_path: Path):
-    r = requests.get(url, headers=HEADERS_DOWNLOAD, stream=True, timeout=30)
+    r = request_with_retry("get", url, headers=HEADERS_DOWNLOAD, stream=True, timeout=30)
     r.raise_for_status()
     with open(out_path, "wb") as f:
         for chunk in r.iter_content(chunk_size=8192):
@@ -168,15 +169,33 @@ def get_audio_duration(path: Path) -> float:
 
 
 # ---------- 3. STOCK FOOTAGE / IMAGES ----------
+def request_with_retry(method: str, url: str, retries: int = 3, **kwargs):
+    """
+    Wraps requests.get/post with automatic retry on timeouts/transient
+    network errors — Pexels occasionally times out under load, and with
+    20-30+ network calls per video, an unhandled single timeout shouldn't
+    fail the whole render.
+    """
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return getattr(requests, method)(url, **kwargs)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_exc = e
+            if attempt < retries - 1:
+                time.sleep(2 * (attempt + 1))  # 2s, 4s backoff
+    raise last_exc
+
+
 def fetch_pexels_video(query: str, out_path: Path) -> bool:
     """Try to fetch a short stock video clip matching the scene text."""
     if not PEXELS_API_KEY:
         return False
     headers = {"Authorization": PEXELS_API_KEY}
-    r = requests.get(
-        "https://api.pexels.com/videos/search",
+    r = request_with_retry(
+        "get", "https://api.pexels.com/videos/search",
         params={"query": query, "per_page": 1, "orientation": "portrait"},
-        headers=headers, timeout=15
+        headers=headers, timeout=20
     )
     if r.status_code != 200 or not r.json().get("videos"):
         return False
@@ -193,10 +212,10 @@ def fetch_pexels_image(query: str, out_path: Path) -> bool:
     if not PEXELS_API_KEY:
         return False
     headers = {"Authorization": PEXELS_API_KEY}
-    r = requests.get(
-        "https://api.pexels.com/v1/search",
+    r = request_with_retry(
+        "get", "https://api.pexels.com/v1/search",
         params={"query": query, "per_page": 1, "orientation": "portrait"},
-        headers=headers, timeout=15
+        headers=headers, timeout=20
     )
     if r.status_code != 200 or not r.json().get("photos"):
         return False
