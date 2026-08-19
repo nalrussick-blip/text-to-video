@@ -44,11 +44,13 @@ jobs:
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          SCRIPT_CONTENT: ${{ inputs.script }}
+          TOPIC_CONTENT: ${{ inputs.topic }}
         run: |
-          if [ -n "${{ inputs.script }}" ]; then
-            echo "${{ inputs.script }}" > script.txt
+          if [ -n "$SCRIPT_CONTENT" ]; then
+            printf '%s\n' "$SCRIPT_CONTENT" > script.txt
           else
-            python3 expand_topic.py "${{ inputs.topic }}" > script.txt
+            python3 expand_topic.py "$TOPIC_CONTENT" > script.txt
           fi
 
       - name: Download avatar (if provided)
