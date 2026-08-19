@@ -347,6 +347,7 @@ def concatenate_scenes(scene_paths: list[Path], music_path: Path | None, final_o
         check=True
     )
 
+    pre_faststart = WORKDIR / "pre_faststart.mp4"
     if music_path and music_path.exists():
         subprocess.run([
             "ffmpeg", "-y", "-i", str(concat_out), "-stream_loop", "-1", "-i", str(music_path),
@@ -355,10 +356,21 @@ def concatenate_scenes(scene_paths: list[Path], music_path: Path | None, final_o
             f"[1:a]aformat=sample_rates=44100:channel_layouts=stereo,volume={BG_MUSIC_VOLUME}[music];"
             f"[voice][music]amix=inputs=2:duration=first:dropout_transition=0[aout]",
             "-map", "0:v", "-map", "[aout]",
-            "-c:v", "copy", "-c:a", "aac", "-shortest", str(final_out), "-loglevel", "error"
+            "-c:v", "copy", "-c:a", "aac", "-shortest", str(pre_faststart), "-loglevel", "error"
         ], check=True)
     else:
-        concat_out.rename(final_out)
+        concat_out.rename(pre_faststart)
+
+    # Final remux with faststart: moves the MP4 metadata (moov atom) to the
+    # front of the file so browsers can start playing/streaming immediately
+    # instead of needing to read the whole file first — without this,
+    # playback can stutter or freeze partway through, especially on slower
+    # connections or when streamed straight from a GitHub Release link.
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(pre_faststart), "-c", "copy",
+         "-movflags", "+faststart", str(final_out), "-loglevel", "error"],
+        check=True
+    )
 
 
 # ---------- MAIN ----------
