@@ -205,12 +205,27 @@ def fetch_pexels_image(query: str, out_path: Path) -> bool:
     return True
 
 
-def scene_keywords(scene_text: str) -> str:
-    """Naive keyword extraction for stock search. Swap for LLM-based extraction for better matches."""
-    words = re.findall(r"[A-Za-z]{4,}", scene_text)
+def scene_keywords(scene_text: str, topic: str | None = None) -> str:
+    """
+    Keyword extraction for stock footage search. Anchors every scene's
+    search to the overall topic (when known) so footage stays on-theme
+    even when an individual scene's sentence is abstract (e.g. "the crowd
+    cheered" alone would match generic crowd footage, not horse racing).
+    """
     stop = {"this", "that", "with", "from", "have", "will", "your", "about", "which", "there"}
-    keywords = [w for w in words if w.lower() not in stop][:4]
-    return " ".join(keywords) or "abstract background"
+
+    topic_words = []
+    if topic:
+        topic_words = [w for w in re.findall(r"[A-Za-z]{4,}", topic) if w.lower() not in stop][:2]
+
+    scene_words = re.findall(r"[A-Za-z]{4,}", scene_text)
+    scene_words = [w for w in scene_words if w.lower() not in stop]
+    # drop scene words that just repeat a topic word already included
+    scene_words = [w for w in scene_words if w.lower() not in {t.lower() for t in topic_words}]
+
+    remaining_slots = max(4 - len(topic_words), 2)
+    keywords = topic_words + scene_words[:remaining_slots]
+    return " ".join(keywords) or (topic or "abstract background")
 
 
 # ---------- 4. ASSEMBLE ONE SCENE ----------
@@ -287,7 +302,7 @@ def concatenate_scenes(scene_paths: list[Path], music_path: Path | None, final_o
 
 # ---------- MAIN ----------
 def run(script_text: str, output_path: str = "final_video.mp4", music_path: str | None = None,
-        avatar_path: str | None = None):
+        avatar_path: str | None = None, topic: str | None = None):
     scenes = split_script_into_scenes(script_text)
     print(f"[1/4] Split into {len(scenes)} scenes")
 
@@ -302,7 +317,7 @@ def run(script_text: str, output_path: str = "final_video.mp4", music_path: str 
         duration = max(get_audio_duration(audio_path), SCENE_MIN_SEC)
         print(f"  scene {i}: {duration:.1f}s voiceover")
 
-        query = scene_keywords(scene_text)
+        query = scene_keywords(scene_text, topic)
         video_path = WORKDIR / f"media_{i:03d}.mp4"
         image_path = WORKDIR / f"media_{i:03d}.jpg"
 
@@ -326,12 +341,20 @@ def run(script_text: str, output_path: str = "final_video.mp4", music_path: str 
 
 
 if __name__ == "__main__":
-    # pull out --avatar PATH from anywhere in the args before positional parsing
+    # pull out --avatar PATH and --topic-anchor TEXT from anywhere in the args
+    # before positional parsing. --topic-anchor lets script-file mode (used by
+    # the deployed Worker/Actions pipeline, which pre-expands topics into a
+    # script file) still anchor stock-footage search to the original topic.
     avatar_path = None
+    topic_anchor = None
     args = sys.argv[1:]
     if "--avatar" in args:
         idx = args.index("--avatar")
         avatar_path = args[idx + 1]
+        args = args[:idx] + args[idx + 2:]
+    if "--topic-anchor" in args:
+        idx = args.index("--topic-anchor")
+        topic_anchor = args[idx + 1]
         args = args[:idx] + args[idx + 2:]
 
     if len(args) < 1:
@@ -350,8 +373,9 @@ if __name__ == "__main__":
         print(script_text)
         print("---")
     else:
+        topic = topic_anchor
         script_text = Path(args[0]).read_text(encoding="utf-8-sig")
         output_path = args[1] if len(args) > 1 else "final_video.mp4"
         music_path = args[2] if len(args) > 2 else None
 
-    run(script_text, output_path, music_path, avatar_path)
+    run(script_text, output_path, music_path, avatar_path, topic)

@@ -55,12 +55,22 @@ jobs:
         if: ${{ inputs.avatar_url != '' }}
         run: |
           curl -sL "${{ inputs.avatar_url }}" -o avatar_input.jpg
-          echo "AVATAR_FLAG=--avatar avatar_input.jpg" >> $GITHUB_ENV
+          echo "AVATAR_PATH=avatar_input.jpg" >> $GITHUB_ENV
+
+      - name: Set topic anchor (keeps stock footage on-theme)
+        if: ${{ inputs.topic != '' }}
+        env:
+          TOPIC_VALUE: ${{ inputs.topic }}
+        run: echo "TOPIC_ANCHOR=$TOPIC_VALUE" >> $GITHUB_ENV
 
       - name: Run render pipeline
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        run: python3 pipeline.py script.txt final_video.mp4 ${AVATAR_FLAG:-}
+        run: |
+          ARGS=(script.txt final_video.mp4)
+          if [ -n "$AVATAR_PATH" ]; then ARGS+=(--avatar "$AVATAR_PATH"); fi
+          if [ -n "$TOPIC_ANCHOR" ]; then ARGS+=(--topic-anchor "$TOPIC_ANCHOR"); fi
+          python3 pipeline.py "${ARGS[@]}"
 
       - name: Publish video as a GitHub Release
         id: publish
