@@ -17,7 +17,7 @@ import requests
 PROMPT_TEMPLATE = """Write a narration script for a short video about: {topic}
 
 Rules:
-- Write 12-18 scenes.
+- Write 8-10 scenes (keep it tight — each scene takes real time to render).
 - Each scene is 1-2 short, spoken-style sentences (this will be read aloud by TTS).
 - Separate each scene with a blank line.
 - No scene numbers, no stage directions, no markdown — just the narration text.
