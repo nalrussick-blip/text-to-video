@@ -247,6 +247,48 @@ def scene_keywords(scene_text: str, topic: str | None = None) -> str:
     return " ".join(keywords) or (topic or "abstract background")
 
 
+def fetch_scene_media_with_fallback(scene_idx, scene_text, query, topic, audio_path,
+                                     duration, prepared_avatar, video_path, image_path):
+    """
+    Tries progressively broader/safer searches so one scene's footage
+    search never crashes the whole render. Order:
+      1. video, full anchored query (topic + scene keywords)
+      2. video, topic-only query (broader, more likely to match)
+      3. image, full anchored query
+      4. image, topic-only query
+      5. image, generic safe fallback query (always has huge stock supply)
+    """
+    if not PEXELS_API_KEY:
+        raise RuntimeError(
+            "No PEXELS_API_KEY set. Get a free key at https://www.pexels.com/api/"
+        )
+
+    attempts = [("video", query)]
+    if topic:
+        attempts.append(("video", topic))
+    attempts.append(("image", query))
+    if topic:
+        attempts.append(("image", topic))
+    attempts.append(("image", "abstract colorful background"))
+
+    for media_type, search_query in attempts:
+        try:
+            if media_type == "video" and fetch_pexels_video(search_query, video_path):
+                return build_scene_clip(scene_idx, scene_text, video_path, audio_path,
+                                         is_image=False, duration=duration, avatar_path=prepared_avatar)
+            if media_type == "image" and fetch_pexels_image(search_query, image_path):
+                return build_scene_clip(scene_idx, scene_text, image_path, audio_path,
+                                         is_image=True, duration=duration, avatar_path=prepared_avatar)
+        except Exception as e:
+            print(f"    (scene {scene_idx}: '{search_query}' attempt failed: {e}, trying next fallback)")
+            continue
+
+    raise RuntimeError(
+        f"Could not find any stock footage for scene {scene_idx} even after fallbacks "
+        f"(query: '{query}', topic: '{topic}'). This is unusual — check Pexels API status."
+    )
+
+
 # ---------- 4. ASSEMBLE ONE SCENE ----------
 def build_scene_clip(scene_idx: int, scene_text: str, media_path: Path,
                       audio_path: Path, is_image: bool, duration: float,
@@ -340,17 +382,9 @@ def run(script_text: str, output_path: str = "final_video.mp4", music_path: str 
         video_path = WORKDIR / f"media_{i:03d}.mp4"
         image_path = WORKDIR / f"media_{i:03d}.jpg"
 
-        if fetch_pexels_video(query, video_path):
-            clip = build_scene_clip(i, scene_text, video_path, audio_path, is_image=False,
-                                     duration=duration, avatar_path=prepared_avatar)
-        elif fetch_pexels_image(query, image_path):
-            clip = build_scene_clip(i, scene_text, image_path, audio_path, is_image=True,
-                                     duration=duration, avatar_path=prepared_avatar)
-        else:
-            raise RuntimeError(
-                f"No PEXELS_API_KEY set or no stock match for scene {i} ('{query}'). "
-                "Get a free key at https://www.pexels.com/api/"
-            )
+        clip = fetch_scene_media_with_fallback(
+            i, scene_text, query, topic, audio_path, duration, prepared_avatar, video_path, image_path
+        )
         scene_clips.append(clip)
 
     print("[2/4] All scenes rendered")
